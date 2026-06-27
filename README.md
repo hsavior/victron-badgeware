@@ -73,6 +73,24 @@ To add the script as a **BadgerOS / Badgeware launcher app**, place it inside
 the `/examples/` folder on the device instead of the root. The launcher
 discovers apps by scanning that folder automatically.
 
+### 5. Optional background image (Tufty 2350 only)
+
+The Tufty 2350 script supports an optional background image displayed behind
+the battery data. If the file is absent the solid navy background is used and
+nothing breaks.
+
+Prepare a **320 × 240 RGBA PNG** and save it as `back.png`. Pre-darken it so
+text stays readable on top — 30–40 % brightness works well. Place it on the
+device at:
+
+```
+/system/apps/batteryBoat/assets/back.png
+```
+
+The script also tries `assets/back.png` (relative) and
+`/apps/batteryBoat/assets/back.png` as fallbacks, so the exact location
+depends on how your launcher is structured.
+
 ---
 
 ## Buttons
