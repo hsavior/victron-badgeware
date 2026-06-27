@@ -28,7 +28,8 @@ victron-badgeware/
 ├── badger2040/
 │   └── main.py             ← Badger 2040 W script (e-ink, mono)
 └── tufty2350/
-    └── main.py             ← Tufty 2350 script (IPS, colour)
+    ├── main.py             ← Tufty 2350 script (IPS, colour)
+    └── icon.png            ← 24×24 launcher icon (battery symbol)
 ```
 
 ---
@@ -69,9 +70,16 @@ Copy the MAC into `config.py`, set `DISCOVER_MODE = False`, and run again.
 **Both devices:** copy `config.py` plus the relevant script to the root of the
 device. Double-tap RESET to mount as a USB drive for easy drag-and-drop.
 
-To add the script as a **BadgerOS / Badgeware launcher app**, place it inside
-the `/examples/` folder on the device instead of the root. The launcher
-discovers apps by scanning that folder automatically.
+To add the script as a **BadgerOS / Badgeware launcher app**, place the files
+inside the app folder on the device. For the Tufty 2350:
+
+```
+/apps/batteryBoat/
+├── __init__.py    ← tufty2350/main.py renamed
+├── icon.png       ← tufty2350/icon.png (24×24, shows in launcher)
+└── assets/
+    └── back.png   ← optional background image (see step 5)
+```
 
 ### 5. Optional background image (Tufty 2350 only)
 
@@ -141,16 +149,6 @@ identical to real AES-CTR.
 Credit to [petaramesh](https://gist.github.com/petaramesh) and
 [georg90](https://gist.github.com/georg90) for the original MicroPython BLE
 decryption approach this project is based on.
-
----
-
-## Screenshots
-
-### Tufty 2350 — dashboard
-![Tufty 2350 dashboard](pictures/tufty2350_dashboard.jpg)
-
-### Badger 2040 W — e-ink display
-![Badger 2040 W](pictures/badger2040_display.jpg)
 
 ---
 
