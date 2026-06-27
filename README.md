@@ -84,12 +84,11 @@ text stays readable on top — 30–40 % brightness works well. Place it on the
 device at:
 
 ```
-/system/apps/batteryBoat/assets/back.png
+/apps/batteryBoat/assets/back.png
 ```
 
-The script also tries `assets/back.png` (relative) and
-`/apps/batteryBoat/assets/back.png` as fallbacks, so the exact location
-depends on how your launcher is structured.
+The script also tries `assets/back.png` as a relative fallback when run
+directly from Thonny.
 
 ---
 
