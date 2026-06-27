@@ -26,7 +26,8 @@ victron-badgeware/
 ├── config.example.py       ← copy to config.py and fill in your device details
 ├── config.py               ← git-ignored; never commit this file
 ├── badger2040/
-│   └── main.py             ← Badger 2040 W script (e-ink, mono)
+│   ├── main.py              ← Badger 2040 W script (e-ink, mono)
+│   └── icon-batteryBoat.png ← launcher icon
 └── tufty2350/
     ├── main.py             ← Tufty 2350 script (IPS, colour)
     └── icon.png            ← 24×24 launcher icon (battery symbol)
