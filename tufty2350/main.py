@@ -239,26 +239,29 @@ def _bt_irq(event, data):
 # screen, color, badge, font, rom_font, image, BUTTON_A, BUTTON_B, run()
 # are Badgeware firmware globals — no import required.
 
-# Enable anti-aliasing for smooth vector font edges
-screen.antialias = image.X4
+# Pixel fonts selected from the font sampler
+# absolute = bold/chunky title font   (header + SOC)
+# winds    = clean/readable body font (detail rows)
+# nope     = 8 px micro font          (footer — always fits)
+pf_title = rom_font.absolute
+pf_body  = rom_font.winds
+pf_foot  = rom_font.nope
 
-# MonaSans-Medium ships preloaded on every Tufty 2350
-monasans = font.load("/system/assets/fonts/MonaSans-Medium.af")
+PAD = 10
 
-# 1 dimension unit = 1% of screen width (3.2 px on 320 px screen).
-# All layout values derive from this so the design scales cleanly.
-du = screen.width / 100
+# Measure actual rendered pixel heights at startup so layout is self-calibrating.
+# screen.measure_text("X") returns (width, height) for the current font.
+screen.font = pf_title
+_, H_TITLE = screen.measure_text("X")
+screen.font = pf_body
+_, H_BODY  = screen.measure_text("X")
 
-SIZE_HUGE  = 16 * du    # ~51 px  large SOC percentage
-SIZE_MED   = 7  * du    # ~22 px  detail rows
-SIZE_SMALL = 4  * du    # ~13 px  header, footer, hints
-
-# Colors
 COL_NAVY    = color.rgb(10,  15,  40)
 COL_GREEN   = color.rgb(50,  210, 80)
 COL_ORANGE  = color.rgb(255, 155, 0)
 COL_RED     = color.rgb(225, 40,  40)
 COL_DIMGREY = color.rgb(90,  90,  110)
+COL_LINE    = color.rgb(50,  55,  80)
 
 
 def _soc_color(soc):
@@ -269,11 +272,22 @@ def _soc_color(soc):
     return COL_RED
 
 
-# Battery bar geometry — right column, full usable height
-BAR_X = int(screen.width  * 0.87)
-BAR_Y = 28
-BAR_W = int(screen.width  * 0.09)
-BAR_H = int(screen.height * 0.76)
+# Single-line header to leave room for the larger pixel fonts.
+# All Y positions derive from H_TITLE / H_BODY so changing those two
+# constants is all you need to fix spacing if the fonts are larger/smaller
+# than estimated.
+_Y_NAME    = 6
+_Y_DIVIDER = _Y_NAME    + H_TITLE + 5
+_Y_SOC     = _Y_DIVIDER + 1       + 4
+_Y_DETAIL1 = _Y_SOC     + H_TITLE + 4
+_Y_DETAIL2 = _Y_DETAIL1 + H_BODY  + 2
+_Y_DETAIL3 = _Y_DETAIL2 + H_BODY  + 2
+_Y_FOOTER  = _Y_DETAIL3 + H_BODY  + 8
+
+BAR_X = int(screen.width * 0.87)
+BAR_W = int(screen.width * 0.11)
+BAR_Y = _Y_DIVIDER + 2          # starts just below divider, aligns with data area
+BAR_H = _Y_FOOTER - BAR_Y - 3   # taller bar → taller segments automatically
 
 
 def _draw_battery_bar(soc, segments=10):
@@ -286,11 +300,14 @@ def _draw_battery_bar(soc, segments=10):
     lit     = min(segments, int(soc_clamped / (100 / segments) + 0.5))
     lit_col = _soc_color(soc)
 
-    # Terminal nub centered above the top segment
-    nub_w = BAR_W // 2
+    # Terminal nub — centred on the inner fill area (not the full bar border)
+    # so it visually aligns with the green segments rather than the outline
+    inner_x = BAR_X + 2
+    inner_w = BAR_W - 4
+    nub_w = inner_w // 2
     nub_h = 5
     screen.pen = color.white
-    screen.rectangle(BAR_X + (BAR_W - nub_w) // 2, BAR_Y - nub_h - 2, nub_w, nub_h)
+    screen.rectangle(inner_x + (inner_w - nub_w) // 2, BAR_Y - nub_h - 2, nub_w, nub_h)
 
     for i in range(segments):
         seg_y = BAR_Y + (segments - 1 - i) * (seg_h + gap)
@@ -309,6 +326,22 @@ def _draw_battery_bar(soc, segments=10):
 
 show_tufty_bat = True    # Button B toggles the Tufty's own battery % in header
 
+# Optional background image — place a 320x240 JPEG at assets/back.jpg inside
+# the app folder. If absent the navy background is used as before.
+# Tries multiple paths so it works whether run from the launcher or Thonny.
+_bg = None
+for _bg_path in (
+    "assets/back.png",                             # RGBA PNG — relative from app dir
+    "/system/apps/batteryBoat/assets/back.png",    # absolute path
+    "/apps/batteryBoat/assets/back.png",           # fallback
+):
+    try:
+        _bg = image.load(_bg_path)
+        print("Background loaded:", _bg_path)
+        break
+    except Exception as e:
+        print("Tried {}: {}".format(_bg_path, e))
+
 
 def _restart_ble():
     """Stop and restart BLE scanning — use if the shunt drops off."""
@@ -325,90 +358,103 @@ def _restart_ble():
 def update():
     global show_tufty_bat
 
-    # badge.pressed() returns True only on the first frame the button is
-    # pressed — already debounced, no prev_* tracking needed
     if badge.pressed(BUTTON_A):
         _restart_ble()
-
     if badge.pressed(BUTTON_B):
         show_tufty_bat = not show_tufty_bat
 
-    # Background
+    # Background — navy base always, then alpha PNG composited on top if available
     screen.pen = COL_NAVY
     screen.clear()
+    if _bg is not None:
+        screen.blit(_bg, rect(0, 0, screen.width, screen.height))
 
     # ---- Waiting state ------------------------------------------------
     if latest_soc is None:
-        screen.font = monasans
+        # Two-line title as tight as possible — just H_TITLE + 3px between lines
+        y_wait = int(screen.height * 0.3)
+        screen.font = pf_title
         screen.pen  = color.white
-        screen.text("Waiting for SmartShunt...", int(5 * du), int(50 * du), SIZE_MED)
-        screen.pen = COL_DIMGREY
-        screen.text("A: restart BLE scan", int(5 * du), int(65 * du), SIZE_SMALL)
+        screen.text("Waiting for", PAD, y_wait)
+        screen.text("SmartShunt...", PAD, y_wait + H_TITLE + 3)
+        screen.font = pf_foot
+        screen.pen  = COL_DIMGREY
+        screen.text("A: restart BLE scan", PAD, int(screen.height * 0.85))
         return
 
     soc_col = _soc_color(latest_soc)
 
-    # ---- Header -------------------------------------------------------
-    screen.font = monasans
+    # ---- Header (single line) -----------------------------------------
+    # Device name in winds (body font) — same family as the detail rows
+    screen.font = pf_body
     screen.pen  = color.white
-    screen.text("{} Battery Status".format(SHUNT_NAME),
-                int(3 * du), int(7 * du), SIZE_SMALL)
+    screen.text(SHUNT_NAME, PAD, _Y_NAME)
 
-    # Tufty's own battery — small, right-aligned, dimmed
+    # Tufty battery (same font as the detail rows / "Start:")
     if show_tufty_bat:
         bat   = badge.battery_level()
-        label = "Bat {}%{}".format(bat, " +" if badge.is_charging() else "")
-        w, _  = screen.measure_text(label, SIZE_SMALL)
+        label = "{}%{}".format(bat, " +" if badge.is_charging() else "")
+        screen.font = pf_body
+        w, _ = screen.measure_text(label)
         screen.pen = COL_DIMGREY
-        screen.text(label, BAR_X - w - int(3 * du), int(7 * du), SIZE_SMALL)
+        screen.text(label, screen.width - w - PAD, _Y_NAME)
+        screen.pen = color.white
 
-    # ---- Big SOC percentage -------------------------------------------
+    # Thin divider
+    screen.pen = COL_LINE
+    screen.rectangle(PAD, _Y_DIVIDER, BAR_X - PAD * 4, 1)
+
+    # ---- SOC percentage -----------------------------------------------
+    screen.font = pf_title
     screen.pen  = soc_col
-    screen.font = monasans
-    screen.text("{:.0f}%".format(latest_soc), int(3 * du), int(40 * du), SIZE_HUGE)
+    screen.text("{:.0f}%".format(latest_soc), PAD, _Y_SOC)
 
-    # ---- 10-segment battery bar (right column) ------------------------
+    # ---- Battery bar --------------------------------------------------
     _draw_battery_bar(latest_soc)
-    screen.pen = color.white   # reset after bar
+    screen.pen = color.white
 
     # ---- Detail rows --------------------------------------------------
-    screen.font = monasans
-    row_spacing = int(SIZE_MED * 1.5)
-    y = int(40 * du) + int(SIZE_HUGE) + int(3 * du)
+    screen.font = pf_body
 
     if latest_voltage is not None and latest_current is not None:
-        screen.text("{:.2f}V   {:.2f}A".format(latest_voltage, latest_current),
-                    int(3 * du), y, SIZE_MED)
+        screen.text("{:.2f}V  {:.2f}A".format(latest_voltage, latest_current), PAD, _Y_DETAIL1)
     elif latest_voltage is not None:
-        screen.text("{:.2f}V".format(latest_voltage), int(3 * du), y, SIZE_MED)
-    y += row_spacing
+        screen.text("{:.2f}V".format(latest_voltage), PAD, _Y_DETAIL1)
 
     if latest_voltage is not None and latest_current is not None:
         line = "{:.0f}W".format(latest_voltage * latest_current)
         if latest_consumed_ah is not None:
-            line += "   {:.1f}Ah".format(latest_consumed_ah)
-        screen.text(line, int(3 * du), y, SIZE_MED)
+            line += "  {:.1f}Ah".format(latest_consumed_ah)
+        screen.text(line, PAD, _Y_DETAIL2)
     elif latest_consumed_ah is not None:
-        screen.text("{:.1f}Ah".format(latest_consumed_ah), int(3 * du), y, SIZE_MED)
-    y += row_spacing
+        screen.text("{:.1f}Ah".format(latest_consumed_ah), PAD, _Y_DETAIL2)
 
     if latest_starter_voltage is not None:
-        screen.text("Start Battery: {:.2f}V".format(latest_starter_voltage),
-                    int(3 * du), y, SIZE_MED)
+        screen.text("Start: {:.2f}V".format(latest_starter_voltage), PAD, _Y_DETAIL3)
 
-    # ---- Footer: data age + button hints ------------------------------
+    # ---- Footer -------------------------------------------------------
+    screen.font = pf_body
+
     if last_rx_ms is not None:
         age_s = time.ticks_diff(time.ticks_ms(), last_rx_ms) // 1000
         screen.pen = COL_RED if age_s > 30 else COL_DIMGREY
-        footer = "Last: {}s  A:scan  B:bat {}".format(
-            age_s, "ON" if show_tufty_bat else "OFF")
+        screen.text(
+            "Last: {}s  A:scan  B:bat {}".format(
+                age_s,
+                "ON" if show_tufty_bat else "OFF"
+            ),
+            PAD,
+            _Y_FOOTER
+        )
     else:
-        screen.pen = COL_DIMGREY
-        footer = "Scanning...  A:restart  B:bat {}".format(
-            "ON" if show_tufty_bat else "OFF")
-
-    screen.text(footer, int(3 * du), int(93 * du), SIZE_SMALL)
-
+        screen.pen = color.white
+        screen.text(
+            "Scanning...  A:restart  B:bat {}".format(
+                "ON" if show_tufty_bat else "OFF"
+            ),
+            PAD,
+            _Y_FOOTER
+        )
 # -------------------------------------------------------------------------
 # Startup
 # -------------------------------------------------------------------------
