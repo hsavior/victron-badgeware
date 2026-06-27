@@ -144,6 +144,16 @@ decryption approach this project is based on.
 
 ---
 
+## Screenshots
+
+### Tufty 2350 — dashboard
+![Tufty 2350 dashboard](pictures/tufty2350_dashboard.jpg)
+
+### Badger 2040 W — e-ink display
+![Badger 2040 W](pictures/badger2040_display.jpg)
+
+---
+
 ## Planned
 
 - [ ] Two-device support on Tufty 2350 (side-by-side layout)
